@@ -83,6 +83,8 @@
   "localAgent": {
     "createVisibleSessions": "Créer des sessions visibles dans Cindy",
     "createVisibleSessionsHint": "S'applique aux sessions que cette app ouvrira désormais. Les messages sont enregistrés dans Cindy ; les sessions existantes sont conservées si l'option est désactivée.",
+    "observeLocalTasks": "Autoriser l’affichage de l’état des sessions sur cet ordinateur",
+    "observeLocalTasksHint": "Lorsque cette option est activée, cette application peut lire les titres et l’état des sessions de cet ordinateur et ouvrir une session dans Cindy. Elle ne peut ni voir le contenu des messages ni contrôler les sessions.",
     "saveFailed": "Impossible d'enregistrer ce paramètre. Réessayez.",
     "messageSource": "Envoyé par l'app locale « {{name}} »",
     "title": "Connexions d'apps locales",
@@ -119,6 +121,8 @@
     "storageUnavailable": "Impossible de lire ou d'enregistrer les données de connexion des apps locales. Les autorisations existantes ont été conservées.",
     "stopUnconfirmed": "Les nouveaux messages vers cette exécution sont bloqués, mais l'arrêt du processus n'a pas été confirmé.",
     "interactionUnavailable": "Le moteur requiert une interaction que cette app ne peut pas recevoir.",
+    "observeLocalTasksRequired": "Autorisez d’abord cette application, dans les réglages de Cindy, à voir l’état des sessions de cet ordinateur.",
+    "taskUnavailable": "Cette session n’existe pas ou cette application ne peut pas la voir.",
     "interrupted": "Cet envoi a été interrompu.",
     "toolTimeout": "Le délai de l'outil de l'app a expiré. Il n'a pas été relancé automatiquement.",
     "connectResult": "Revenez à l'app demandeuse pour connaître le résultat de la connexion. L'autorisation se décide dans la fenêtre de confirmation de Cindy.",

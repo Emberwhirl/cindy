@@ -4,6 +4,7 @@ export interface LocalAgentConnection {
   name: string;
   clientId?: string;
   createVisibleSessions?: boolean;
+  observeLocalTasks?: boolean;
 }
 
 export interface LocalAgentSettingsApi {
@@ -11,6 +12,7 @@ export interface LocalAgentSettingsApi {
   connections(): Promise<LocalAgentConnection[]>;
   revoke(connectionId?: string): Promise<boolean>;
   setCreateVisibleSessions(connectionId: string, enabled: boolean): Promise<boolean>;
+  setObserveLocalTasks(connectionId: string, enabled: boolean): Promise<boolean>;
   onConnectionsChanged(listener: () => void): () => void;
   onConfirmation(listener: (request: LocalAgentConfirmation) => void): () => void;
   onConfirmationDismissed(listener: (requestId: string) => void): () => void;

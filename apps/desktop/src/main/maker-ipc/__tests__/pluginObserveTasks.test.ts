@@ -8,7 +8,7 @@ import * as schema from '../../localDb/schema.js';
 
 const mocks = vi.hoisted(() => ({
   workdirs: [] as Array<{ path: string; exists: boolean }>,
-  phases: new Map<string, { phase: string; attention: boolean }>(),
+  phases: new Map<string, { phase: string; attention: boolean; startedAtMs?: number; turnGeneration?: number }>(),
   onRead: null as null | (() => void),
   batchReaders: [] as string[][],
 }));
@@ -23,7 +23,7 @@ vi.mock('../sessionActivityProjection.js', () => ({
   },
 }));
 
-import { assertPluginObservableTask, listPluginObserveTasks } from '../pluginObserveTasks.js';
+import { assertPluginObservableTask, listDeviceObserveTasks, listPluginObserveTasks } from '../pluginObserveTasks.js';
 
 let db: Database.Database;
 let client: DbClient;
@@ -120,4 +120,35 @@ it('fails closed when the account database changes during the read', async () =>
   insert('task', '/repo', 1);
   mocks.onRead = () => setCurrentDbClient({} as DbClient, 'other-user');
   await expect(listPluginObserveTasks('/repo')).rejects.toThrow('PERMISSION_DENIED');
+});
+
+// makecindy/cindy#11188: the external-device list is the sidebar's local tasks, dialogues included, and its
+// rows are the only task data that reaches the local-app API. Gap: the plugin cases above are project-scoped
+// and exclude dialogues. Minimal failing input: one projectless dialogue next to an archived task. tier: unit.
+it('lists local sidebar tasks for devices, dialogues included, as metadata without paths', async () => {
+  insert('project', '/repo', 30);
+  insert('dialogue', '/im', 40, "workspace_kind = 'dialogue', source = 'feishu'");
+  insert('lead', '/repo', 10, "orca_role = 'lead'");
+  insert('worker', '/repo', 99, "orca_role = 'worker'");
+  db.exec("INSERT INTO orca_teams VALUES ('t1', 'lead', 'active'); INSERT INTO orca_workers VALUES ('1', 't1', 'worker', NULL)");
+  insert('archived', '/repo', 99, "status = 'archived'");
+  insert('hidden', '/repo', 99, 'hidden_at = 1');
+  insert('review', '/repo', 99, "source = 'review'");
+  insert('side-chat', '/repo', 99, "source = 'side-chat'");
+  insert('remote', '/repo', 99, "remote_host_id = 'ssh-host'");
+  insert('device', '/repo', 99, "agent_device_id = 'other'");
+  insert('bot', '/repo', 99);
+  db.exec("INSERT INTO bot_session_links VALUES ('link', 'bot')");
+  mocks.phases.set('project', { phase: 'running', attention: false, startedAtMs: 25, turnGeneration: 4 });
+  mocks.phases.set('dialogue', { phase: 'completed', attention: true, startedAtMs: 5 });
+  mocks.phases.set('worker', { phase: 'needs-interaction', attention: true });
+
+  expect(await listDeviceObserveTasks()).toEqual([
+    { id: 'dialogue', title: 'title dialogue', agentKind: 'cc', status: 'done', lastActivityAt: 40, startedAt: null, turnGeneration: null },
+    { id: 'project', title: 'title project', agentKind: 'cc', status: 'running', lastActivityAt: 30, startedAt: 25, turnGeneration: 4 },
+    { id: 'lead', title: 'title lead', agentKind: 'cc', status: 'awaiting', lastActivityAt: 10, startedAt: null, turnGeneration: null },
+  ]);
+
+  mocks.onRead = () => setCurrentDbClient({} as DbClient, 'other-user');
+  await expect(listDeviceObserveTasks()).rejects.toThrow('PERMISSION_DENIED');
 });

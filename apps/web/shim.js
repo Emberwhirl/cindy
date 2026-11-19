@@ -914,6 +914,7 @@ import { startHostEventStream } from '@cindy/maker-shared/host-event-stream';
     'localAgent.connections': () => STATIC.emptyList,
     'localAgent.answerConfirmation': () => unsupported('localAgent.answerConfirmation'),
     'localAgent.setCreateVisibleSessions': () => unsupported('localAgent.setCreateVisibleSessions'),
+    'localAgent.setObserveLocalTasks': () => unsupported('localAgent.setObserveLocalTasks'),
     'localAgent.revoke': () => unsupported('localAgent.revoke'),
     'remoteDesktop.state': () => ({ enabled: false, active: null, overlay: false, permissionGuide: false, windowsSupport: 'unavailable' }),
     'remoteDesktop.permissions': () => ({ screen: 'granted', accessibility: 'granted', inputMonitoring: 'granted' }),

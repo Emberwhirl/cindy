@@ -98,16 +98,24 @@ export function LocalAgentSection() {
       setRevoking(undefined);
     }
   };
-  const setVisibleSessions = async (id: string, enabled: boolean) => {
+  const setPreference = async (
+    id: string,
+    key: 'createVisibleSessions' | 'observeLocalTasks',
+    enabled: boolean,
+  ) => {
     if (busy.current) return;
     busy.current = true;
     setSaving(id);
     try {
-      if (!(await window.electronAPI.localAgent.setCreateVisibleSessions(id, enabled)))
-        throw new Error('Connection unavailable');
+      const api = window.electronAPI.localAgent;
+      const saved =
+        key === 'observeLocalTasks'
+          ? await api.setObserveLocalTasks(id, enabled)
+          : await api.setCreateVisibleSessions(id, enabled);
+      if (!saved) throw new Error('Connection unavailable');
       setConnections((previous) =>
         previous.map((connection) =>
-          connection.id === id ? { ...connection, createVisibleSessions: enabled } : connection,
+          connection.id === id ? { ...connection, [key]: enabled } : connection,
         ),
       );
     } catch (error) {
@@ -189,7 +197,33 @@ export function LocalAgentSection() {
                   aria-describedby={`local-agent-visible-hint-${connection.id}`}
                   checked={connection.createVisibleSessions === true}
                   disabled={Boolean(revoking) || Boolean(saving)}
-                  onCheckedChange={(enabled) => void setVisibleSessions(connection.id, enabled)}
+                  onCheckedChange={(enabled) =>
+                    void setPreference(connection.id, 'createVisibleSessions', enabled)
+                  }
+                />
+              }
+            />
+            <SettingsRow
+              title={
+                <label htmlFor={`local-agent-observe-${connection.id}`}>
+                  {t('localAgent.observeLocalTasks')}
+                </label>
+              }
+              hint={
+                <span id={`local-agent-observe-hint-${connection.id}`}>
+                  {t('localAgent.observeLocalTasksHint')}
+                </span>
+              }
+              trailing={
+                <Switch
+                  data-setting-id={localAgentSettings.connections.id}
+                  id={`local-agent-observe-${connection.id}`}
+                  aria-describedby={`local-agent-observe-hint-${connection.id}`}
+                  checked={connection.observeLocalTasks === true}
+                  disabled={Boolean(revoking) || Boolean(saving)}
+                  onCheckedChange={(enabled) =>
+                    void setPreference(connection.id, 'observeLocalTasks', enabled)
+                  }
                 />
               }
             />

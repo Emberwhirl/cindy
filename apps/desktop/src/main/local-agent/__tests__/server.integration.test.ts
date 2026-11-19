@@ -970,3 +970,170 @@ describe('local application authorization and lifecycle', () => {
     expect((await poll).error).toBeDefined();
   });
 });
+
+// makecindy/cindy#11188: an external device may read task status only after the owner turns it
+// on in Settings, and receives nothing beyond the allowlisted fields. This file loads server.ts
+// without Electron, so a window import there fails every case here (architecture-invariants §5).
+// Gap: no earlier case reaches device/*. Minimal failing input: device/activity from a new grant.
+describe('external device task observation', () => {
+  const tasks = (...list: unknown[]) => {
+    const listeners = new Set<() => void>();
+    const port = {
+      list,
+      tasks: vi.fn(async () => port.list),
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      focus: vi.fn(),
+      signal: () => listeners.forEach((listener) => listener()),
+    };
+    return port;
+  };
+  const raw = {
+    id: 'task-1',
+    title: ' Fix\u0000 login\u202e ',
+    agentKind: 'codex',
+    status: 'running',
+    lastActivityAt: 20,
+    startedAt: 10,
+    turnGeneration: 3,
+    workingDir: '/home/owner/secret-project',
+    currentActionSummary: 'cat ~/.ssh/id_rsa',
+    messages: [{ text: 'private body' }],
+  };
+  const clean = {
+    id: 'task-1',
+    title: 'Fix  login',
+    agentKind: 'codex',
+    status: 'running',
+    lastActivityAt: 20,
+    startedAt: 10,
+    turnGeneration: 3,
+  };
+  const observer = async (port: ReturnType<typeof tasks>, overrides = {}) => {
+    const f = await fixture({ deviceObserve: port, ...overrides });
+    const secret = await f.connect({ id: 'org.example.deck', name: 'Deck' });
+    const id = f.server().connections()[0].id;
+    expect(await f.server().setObserveLocalTasks(id, true)).toBe(true);
+    return { f, secret, id };
+  };
+
+  it('stays off until Settings enables it, answers 403 before reading tasks, and stops a wait when turned off', async () => {
+    const port = tasks(raw);
+    const f = await fixture({ deviceObserve: port });
+    const secret = await f.connect({ id: 'org.example.deck', name: 'Deck' });
+    const id = f.server().connections()[0].id;
+    const denied = await fetch(`${f.server().base}/rpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({
+        version: 1,
+        method: 'device/activity',
+        params: { observeLocalTasks: true },
+      }),
+    });
+    expect(denied.status).toBe(403);
+    expect((await denied.json()).error.code).toBe('DEVICE_OBSERVE_DISABLED');
+    expect(
+      (await f.rpc('device/session/focus', { sessionId: 'task-1' }, secret)).error.code,
+    ).toBe('DEVICE_OBSERVE_DISABLED');
+    expect((await f.rpc('device/activity', {})).error.code).toBe('UNAUTHORIZED');
+    expect(port.tasks).not.toHaveBeenCalled();
+    expect(f.server().connections()[0].observeLocalTasks).toBeUndefined();
+
+    expect(await f.server().setObserveLocalTasks(id, true)).toBe(true);
+    await f.restart();
+    expect(f.server().connections()[0]).toMatchObject({ observeLocalTasks: true });
+    expect(f.server().connections()[0].createVisibleSessions).toBeUndefined();
+    const first = (await f.rpc('device/activity', {}, secret)).result;
+    const waiting = f.rpc('device/activity', { cursor: first.cursor }, secret);
+    await vi.waitFor(() => expect(port.tasks.mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect(await f.server().setObserveLocalTasks(id, false)).toBe(true);
+    expect((await waiting).error.code).toBe('DEVICE_OBSERVE_DISABLED');
+  });
+
+  it('sends only allowlisted task fields and drops entries it cannot describe', async () => {
+    const port = tasks(
+      raw,
+      { ...raw, id: 'task-2', status: 'thinking' },
+      { ...raw, id: 'task-1', title: 'duplicate' },
+      { ...raw, id: 'task-3', title: null, status: 'idle', startedAt: null, turnGeneration: 'x' },
+      null,
+    );
+    const { f, secret } = await observer(port);
+    const { result } = await f.rpc('device/activity', {}, secret);
+    expect(result.tasks).toEqual([
+      clean,
+      { ...clean, id: 'task-3', title: '', status: 'idle', startedAt: null, turnGeneration: null },
+    ]);
+    expect(JSON.stringify(result)).not.toMatch(/secret-project|id_rsa|private body/);
+  });
+
+  it('holds an unchanged cursor until the wait ends and returns early when activity changes', async () => {
+    const port = tasks(raw);
+    const { f, secret } = await observer(port);
+    const first = (await f.rpc('device/activity', {}, secret)).result;
+    expect((await f.rpc('device/activity', { cursor: 0 }, secret)).result).toEqual(first);
+    const idle = (await f.rpc('device/activity', { cursor: first.cursor, waitMs: 20 }, secret))
+      .result;
+    expect(idle).toEqual(first);
+
+    const waiting = f.rpc('device/activity', { cursor: first.cursor, waitMs: 20_000 }, secret);
+    const reads = port.tasks.mock.calls.length;
+    await vi.waitFor(() => expect(port.tasks.mock.calls.length).toBeGreaterThan(reads));
+    port.list = [{ ...raw, status: 'awaiting' }];
+    port.signal();
+    const changed = (await waiting).result;
+    expect(changed.cursor).toBeGreaterThan(first.cursor);
+    expect(changed.tasks).toEqual([{ ...clean, status: 'awaiting' }]);
+
+    for (const params of [{ cursor: -1 }, { cursor: 'x' }, { waitMs: 60_000 }])
+      expect((await f.rpc('device/activity', params, secret)).error).toBeDefined();
+    port.tasks.mockRejectedValueOnce(new Error('PERMISSION_DENIED'));
+    expect((await f.rpc('device/activity', {}, secret)).error.code).toBe('LOCAL_AGENT_FAILED');
+  });
+
+  it('opens only a listed task, passes the focus choice through, and never serves another account', async () => {
+    const port = tasks(raw);
+    let scope = 'owner';
+    const { f, secret } = await observer(port, { scope: () => scope });
+    expect((await f.rpc('device/session/focus', { sessionId: 'hidden' }, secret)).error.code).toBe(
+      'TARGET_UNAVAILABLE',
+    );
+    expect(
+      (await f.rpc('device/session/focus', { sessionId: 'task-1', focus: 'yes' }, secret)).error,
+    ).toBeDefined();
+    expect(port.focus).not.toHaveBeenCalled();
+    expect((await f.rpc('device/session/focus', { sessionId: 'task-1' }, secret)).result).toEqual(
+      {},
+    );
+    await f.rpc('device/session/focus', { sessionId: 'task-1', focus: false }, secret);
+    expect(port.focus.mock.calls).toEqual([
+      ['task-1', true],
+      ['task-1', false],
+    ]);
+    scope = 'other';
+    expect((await f.rpc('device/activity', {}, secret)).error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('advertises only what the host can do', async () => {
+    const none = await fixture();
+    const bare = (await none.rpc('capabilities')).result;
+    expect(bare.features.deviceObserve).toBeUndefined();
+    expect(bare.methods.join()).not.toContain('device/');
+    expect((await none.rpc('device/activity', {}, await none.connect())).error.code).toBe(
+      'METHOD_UNSUPPORTED',
+    );
+
+    const headless = { ...tasks(raw), focus: undefined };
+    const { f, secret } = await observer(headless as unknown as ReturnType<typeof tasks>);
+    const { features, methods } = (await f.rpc('capabilities')).result;
+    expect(features.deviceObserve).toBe(true);
+    expect(methods).toContain('device/activity');
+    expect(methods).not.toContain('device/session/focus');
+    expect((await f.rpc('device/session/focus', { sessionId: 'task-1' }, secret)).error.code).toBe(
+      'METHOD_UNSUPPORTED',
+    );
+  });
+});
