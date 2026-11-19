@@ -286,6 +286,7 @@ const HEADLESS_AGENT_ISLAND_NATIVE_HOST: AgentIslandNativeRenderer = {
 };
 
 let serviceSingleton: AgentIslandService | null = null;
+const readyListeners = new Set<(service: AgentIslandService) => void>();
 
 /**
  * Creates the process-wide Agent Island activity coordinator.
@@ -320,11 +321,28 @@ export function initAgentIslandService(deps: AgentIslandServiceDeps): AgentIslan
   } else {
     serviceSingleton.setEnabled(false);
   }
+  const pendingReadyListeners = [...readyListeners];
+  readyListeners.clear();
+  for (const listener of pendingReadyListeners) listener(serviceSingleton);
   return serviceSingleton;
 }
 
 export function getAgentIslandService(): AgentIslandService | null {
   return serviceSingleton;
+}
+
+/** Runs once the island service exists (immediately if it already does). */
+export function onAgentIslandServiceReady(
+  listener: (service: AgentIslandService) => void,
+): () => void {
+  if (serviceSingleton) {
+    listener(serviceSingleton);
+    return () => {};
+  }
+  readyListeners.add(listener);
+  return () => {
+    readyListeners.delete(listener);
+  };
 }
 
 function sessionActivitySnapshotsEqual(
