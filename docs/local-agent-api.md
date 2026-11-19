@@ -19,6 +19,15 @@ node scripts/examples/local-agent-client.mjs --discovery "<profile>/local-agent/
 
 示例令牌只在进程内存中，退出时关闭自己的会话并撤销自己的授权，不打印、保存或复用令牌。需要长期连接的产品自行通过 OS 凭据库保存此应用令牌；不得复制供应商登录。命令行参数不接收秘密。`--list-models` 不调用模型生成。
 
+无需外接硬件即可在 Windows 上测试本机任务状态：
+
+```sh
+node scripts/examples/local-agent-device-observer.mjs --discovery "<profile>/local-agent/discovery.json" --once --json
+node scripts/examples/local-agent-device-observer.mjs --discovery "<profile>/local-agent/discovery.json" --focus "<session-id>"
+```
+
+在 Cindy 批准应用后，到 **设置 → 远程连接 → 本机应用连接** 为它开启「允许查看本机任务状态」。示例退出时会撤销自己的授权。
+
 ## 开发连接码（可选增量）
 
 开发构建在 **设置 → 远程连接 → 本机应用连接 → 开发连接** 提供“复制连接码”。正式构建隐藏这一行。Main 只从本进程当前持有租约、owner 仍有效的 ready server 内存生成码，不读取其他实例的发现文件；启动中、未登录/未进入本地模式、`HOST_IN_USE`、启动失败或已停止均不能复制。复制时重新查询当前状态。
@@ -186,6 +195,6 @@ Claude client-only 关闭原生 tools/settings/skills；Pi 仅开启客户端网
 - `maker-core` 对应适配器：Claude SDK 隔离选项；Pi 真二进制 + 本机模型响应夹具；Codex 真 app-server（需 `CINDY_CODEX_TEST_BINARY`）。
 - `apps/desktop/scripts/fixtures/local-agent/`：真实设置组件，多应用单项撤销、取消、失败、手机宽度、五种语言与深浅主题；宿主接口由场景提供，不替代真实授权与 IPC 验收。
 
-- `server.integration.test.ts` 的「external device task observation」：未开启 403、字段白名单、游标等待与提前唤醒、只打开已列出任务、无窗口宿主不声明 focus；该文件不加载 Electron。
+- `server.integration.test.ts` 的「external device task observation」：未开启 403、字段白名单、游标等待与提前唤醒、只打开已列出任务、无窗口宿主不声明 focus；该文件不加载 Electron。`scripts/examples/local-agent-device-observer.mjs` 可无硬件测试状态读取和任务聚焦。
 - `service.test.ts`：真实 service/确认桥接/可信 IPC handler 联动，批准、取消、abort、超时、导航/关闭、账号换代、伪造回包和并发撤销隔离。
 - `apps/desktop/scripts/fixtures/local-agent-confirmation/`：生产确认 Host 与共用 ConfirmDialog，五语言、双主题、320px、默认取消焦点、Tab/Esc、队列取消；主进程与实际授权另由隔离 Desktop 验证。
