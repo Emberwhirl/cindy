@@ -1,4 +1,4 @@
-import { getAgentIslandService } from '../agent-island/service.js';
+import { getAgentIslandService, onAgentIslandServiceReady } from '../agent-island/service.js';
 import { openMainWindowSession } from '../deepLink.js';
 import { listDeviceObserveTasks } from '../maker-ipc/pluginObserveTasks.js';
 import type { LocalAgentDeviceObserve } from './server.js';
@@ -7,10 +7,23 @@ import type { LocalAgentDeviceObserve } from './server.js';
 export function desktopDeviceObserve(assertCurrent: () => void): LocalAgentDeviceObserve {
   const listeners = new Set<() => void>();
   let detach: (() => void) | undefined;
+  let cancelReady: (() => void) | undefined;
+  const notifyListeners = () => {
+    for (const listener of listeners) listener();
+  };
   const attach = () => {
     if (detach || !listeners.size) return;
-    detach = getAgentIslandService()?.subscribeSessionActivity(() => {
-      for (const listener of listeners) listener();
+    const service = getAgentIslandService();
+    if (service) {
+      detach = service.subscribeSessionActivity(notifyListeners);
+      return;
+    }
+    if (cancelReady) return;
+    cancelReady = onAgentIslandServiceReady((readyService) => {
+      cancelReady = undefined;
+      if (!listeners.size) return;
+      detach = readyService.subscribeSessionActivity(notifyListeners);
+      notifyListeners();
     });
   };
   return {
@@ -29,6 +42,8 @@ export function desktopDeviceObserve(assertCurrent: () => void): LocalAgentDevic
         if (listeners.size) return;
         detach?.();
         detach = undefined;
+        cancelReady?.();
+        cancelReady = undefined;
       };
     },
     focus(sessionId, focus) {
