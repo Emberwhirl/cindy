@@ -1018,6 +1018,99 @@ describe('external device task observation', () => {
     expect(await f.server().setObserveLocalTasks(id, true)).toBe(true);
     return { f, secret, id };
   };
+  const observerExample = fileURLToPath(
+    new URL('../../../../../../scripts/examples/local-agent-device-observer.mjs', import.meta.url),
+  );
+  const runObserver = (discoveryFile: string, args: string[]) => {
+    let capturedStderr = '';
+    const completed = new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+      const child = execFile(
+        process.execPath,
+        [observerExample, '--discovery', discoveryFile, ...args],
+        { encoding: 'utf8', timeout: 10_000 },
+        (error, stdout, stderr) => {
+          if (error) reject(error);
+          else resolve({ stdout, stderr });
+        },
+      );
+      child.stderr?.setEncoding('utf8');
+      child.stderr?.on('data', (chunk: string) => {
+        capturedStderr += chunk;
+      });
+      cleanups.push(async () => {
+        if (child.exitCode === null && !child.killed) {
+          child.kill();
+          await once(child, 'close');
+        }
+      });
+    });
+    return {
+      stderr: () => capturedStderr,
+      completed: completed.then(
+        (result) => ({ result }),
+        (error: unknown) => ({ error }),
+      ),
+    };
+  };
+
+  // Value: verifies permission retry, allowlisted output, and grant revocation in a real process.
+  it(
+    'waits for task observation to be enabled, prints one JSON snapshot, and revokes on exit',
+    async () => {
+      const port = tasks(raw);
+      const f = await fixture({ deviceObserve: port });
+      const processRun = runObserver(f.server().discoveryFile, [
+        '--client-name',
+        'Deck',
+        '--once',
+        '--json',
+      ]);
+
+      await vi.waitFor(() => expect(f.server().connections()).toHaveLength(1), { timeout: 5_000 });
+      const hint =
+        'In Cindy Settings > Local App Connections, turn on "Allow viewing session status on this computer" for Deck.';
+      await vi.waitFor(() => expect(processRun.stderr()).toContain(hint), { timeout: 5_000 });
+      const connection = f.server().connections()[0];
+      expect(await f.server().setObserveLocalTasks(connection.id, true)).toBe(true);
+
+      const outcome = await processRun.completed;
+      if ('error' in outcome) throw outcome.error;
+      const { stdout, stderr } = outcome.result;
+      const lines = stdout.trim().split(/\r?\n/);
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines[0]!)).toEqual({ cursor: expect.any(Number), tasks: [clean] });
+      expect(stderr).toContain(hint);
+      expect(f.server().connections()).toEqual([]);
+    },
+    10_000,
+  );
+
+  // Value: verifies the background focus option through the public RPC.
+  it(
+    'focuses a listed task in the background and revokes on exit',
+    async () => {
+      const port = tasks(raw);
+      const f = await fixture({ deviceObserve: port });
+      const processRun = runObserver(f.server().discoveryFile, [
+        '--client-name',
+        'Deck',
+        '--focus',
+        'task-1',
+        '--background',
+      ]);
+
+      await vi.waitFor(() => expect(f.server().connections()).toHaveLength(1), { timeout: 5_000 });
+      const connection = f.server().connections()[0];
+      expect(await f.server().setObserveLocalTasks(connection.id, true)).toBe(true);
+
+      const outcome = await processRun.completed;
+      if ('error' in outcome) throw outcome.error;
+      expect(port.focus).toHaveBeenCalledTimes(1);
+      expect(port.focus).toHaveBeenCalledWith('task-1', false);
+      expect(f.server().connections()).toEqual([]);
+    },
+    10_000,
+  );
 
   it('stays off until Settings enables it, answers 403 before reading tasks, and stops a wait when turned off', async () => {
     const port = tasks(raw);
