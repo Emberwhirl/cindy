@@ -83,6 +83,8 @@
   "localAgent": {
     "createVisibleSessions": "在 Cindy 中建立可見任務",
     "createVisibleSessionsHint": "僅影響此應用程式之後開啟的任務。訊息會儲存在 Cindy 中，關閉後已有任務仍保留。",
+    "observeLocalTasks": "允許查看本機任務狀態",
+    "observeLocalTasksHint": "開啟後，此應用程式可讀取這台電腦上任務的標題與狀態，並在 Cindy 中開啟任務；看不到訊息內容，也不能操作任務。",
     "saveFailed": "儲存設定失敗，請重試。",
     "messageSource": "由本機應用程式「{{name}}」傳送",
     "title": "本機應用程式連線",
@@ -119,6 +121,8 @@
     "storageUnavailable": "無法讀取或儲存本機應用程式連線資料，已保留現有授權紀錄。",
     "stopUnconfirmed": "已阻止繼續向此執行傳送訊息，但尚未確認程序已停止。",
     "interactionUnavailable": "引擎需要此應用程式無法接收的互動操作。",
+    "observeLocalTasksRequired": "請先在 Cindy 設定中允許此應用程式查看本機任務狀態。",
+    "taskUnavailable": "該任務不存在，或此應用程式無法查看。",
     "interrupted": "本次傳送已中斷。",
     "toolTimeout": "應用程式工具呼叫已逾時，未自動重試。",
     "connectResult": "請返回申請連線的應用程式查看結果，授權由 Cindy 確認視窗決定。",

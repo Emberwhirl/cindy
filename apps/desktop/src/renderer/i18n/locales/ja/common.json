@@ -83,6 +83,8 @@
   "localAgent": {
     "createVisibleSessions": "Cindy に表示するセッションを作成",
     "createVisibleSessionsHint": "今後このアプリが開くセッションに適用します。メッセージは Cindy に保存され、オフにしても既存のセッションは残ります。",
+    "observeLocalTasks": "このコンピューターのセッション状態の表示を許可",
+    "observeLocalTasksHint": "オンにすると、このアプリはこのコンピューター上のセッションのタイトルと状態を読み取り、Cindy でセッションを開けます。メッセージの内容は見えず、セッションの操作もできません。",
     "saveFailed": "設定を保存できませんでした。もう一度お試しください。",
     "messageSource": "ローカルアプリ「{{name}}」から送信",
     "title": "ローカルアプリの接続",
@@ -119,6 +121,8 @@
     "storageUnavailable": "ローカルアプリの接続データを読み込めないか、保存できませんでした。既存の承認記録は保持されています。",
     "stopUnconfirmed": "この実行への追加メッセージは停止しましたが、プロセスの終了はまだ確認できていません。",
     "interactionUnavailable": "エンジンが必要とする操作を、このアプリでは受け取れません。",
+    "observeLocalTasksRequired": "先に Cindy の設定で、このアプリにこのコンピューターのセッション状態の表示を許可してください。",
+    "taskUnavailable": "そのセッションは存在しないか、このアプリからは表示できません。",
     "interrupted": "今回の送信は中断されました。",
     "toolTimeout": "アプリのツールがタイムアウトしました。自動で再試行していません。",
     "connectResult": "接続結果は申請元のアプリで確認してください。承認は Cindy の確認ウィンドウで決定します。",

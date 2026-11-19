@@ -83,6 +83,8 @@
   "localAgent": {
     "createVisibleSessions": "Create visible sessions in Cindy",
     "createVisibleSessionsHint": "Applies to sessions this app opens from now on. Messages are saved in Cindy; existing sessions are kept when turned off.",
+    "observeLocalTasks": "Allow viewing session status on this computer",
+    "observeLocalTasksHint": "When on, this app can read the titles and status of sessions on this computer and open a session in Cindy. It cannot see message content or control sessions.",
     "saveFailed": "Could not save this setting. Try again.",
     "messageSource": "Sent by local app “{{name}}”",
     "title": "Local App Connections",
@@ -119,6 +121,8 @@
     "storageUnavailable": "Could not read or save local app connection data. Existing authorization records were retained.",
     "stopUnconfirmed": "Further messages to this execution are blocked, but the process has not been confirmed stopped.",
     "interactionUnavailable": "The engine requires an interaction that this app cannot receive.",
+    "observeLocalTasksRequired": "Allow this app to view session status on this computer in Cindy settings first.",
+    "taskUnavailable": "That session does not exist or this app cannot view it.",
     "interrupted": "This send was interrupted.",
     "toolTimeout": "The app tool timed out. It was not automatically retried.",
     "connectResult": "Return to the requesting app for the connection result. Authorization is decided in the Cindy confirmation window.",

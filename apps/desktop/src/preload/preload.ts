@@ -1253,6 +1253,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     developerConnection: (): Promise<import('../shared/localAgent').LocalAgentDeveloperConnection | null> => ipcRenderer.invoke('local-agent:developer-connection'),
     connections: (): Promise<import('../shared/localAgent').LocalAgentConnection[]> => ipcRenderer.invoke('local-agent:connections'),
     setCreateVisibleSessions: (connectionId: string, enabled: boolean): Promise<boolean> => ipcRenderer.invoke('local-agent:set-create-visible-sessions', connectionId, enabled),
+    setObserveLocalTasks: (connectionId: string, enabled: boolean): Promise<boolean> => ipcRenderer.invoke('local-agent:set-observe-local-tasks', connectionId, enabled),
     revoke: (connectionId?: string): Promise<boolean> => ipcRenderer.invoke('local-agent:revoke', connectionId),
     onConnectionsChanged: (listener: () => void) => {
       const receive = () => listener();

@@ -83,6 +83,8 @@
   "localAgent": {
     "createVisibleSessions": "Sichtbare Sitzungen in Cindy erstellen",
     "createVisibleSessionsHint": "Gilt für Sitzungen, die diese App ab sofort öffnet. Nachrichten werden in Cindy gespeichert; vorhandene Sitzungen bleiben beim Ausschalten erhalten.",
+    "observeLocalTasks": "Sitzungsstatus auf diesem Computer anzeigen lassen",
+    "observeLocalTasksHint": "Wenn aktiviert, kann diese App Titel und Status der Sitzungen auf diesem Computer lesen und eine Sitzung in Cindy öffnen. Sie sieht keine Nachrichteninhalte und kann Sitzungen nicht steuern.",
     "saveFailed": "Diese Einstellung konnte nicht gespeichert werden. Versuche es erneut.",
     "messageSource": "Von lokaler App „{{name}}“ gesendet",
     "title": "Lokale App-Verbindungen",
@@ -119,6 +121,8 @@
     "storageUnavailable": "Die Verbindungsdaten der lokalen App konnten nicht gelesen oder gespeichert werden. Vorhandene Berechtigungsdatensätze wurden beibehalten.",
     "stopUnconfirmed": "Weitere Nachrichten an diese Ausführung werden blockiert, das Beenden des Prozesses wurde jedoch noch nicht bestätigt.",
     "interactionUnavailable": "Die Engine erfordert eine Interaktion, die diese App nicht empfangen kann.",
+    "observeLocalTasksRequired": "Erlaube dieser App zuerst in den Cindy-Einstellungen, den Sitzungsstatus auf diesem Computer anzuzeigen.",
+    "taskUnavailable": "Diese Sitzung existiert nicht oder kann von dieser App nicht angezeigt werden.",
     "interrupted": "Dieser Sendevorgang wurde unterbrochen.",
     "toolTimeout": "Zeitüberschreitung beim App-Tool. Es wurde nicht automatisch erneut ausgeführt.",
     "connectResult": "Kehre zur anfragenden App zurück, um das Verbindungsergebnis zu sehen. Die Autorisierung wird im Bestätigungsfenster von Cindy entschieden.",

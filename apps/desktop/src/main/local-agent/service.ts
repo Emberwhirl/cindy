@@ -26,6 +26,7 @@ import { isTrustedAppRendererWindow } from '../security/trustedAppRenderer.js';
 import { localAgentModels } from './catalog.js';
 import { remoteLocalAgentModels } from './remoteCatalog.js';
 import { createLocalAgentServer, LocalAgentError, type LocalAgentServerDeps } from './server.js';
+import { desktopDeviceObserve } from './deviceObserve.js';
 import { withCrossProcessLock } from '../device-link/crossProcessLock.js';
 import { openLocalAgentRuntime } from './runtime.js';
 import { localAgentMessage } from './messages.js';
@@ -177,6 +178,10 @@ export function installLocalAgentHost(maker: Maker): void {
           assertCurrent,
         }), load.track);
       },
+      deviceObserve: desktopDeviceObserve(() => {
+        if (scopeNow() !== scope)
+          throw new LocalAgentError('UNAUTHORIZED', 'Cindy 当前账号已更改，请重新连接。');
+      }),
       message: localAgentMessage,
       warn: (code) => log.warn('local agent request failed', { code }),
       changed: () => {
@@ -330,6 +335,34 @@ export async function setLocalAgentCreateVisibleSessions(
     )
       return false;
     return server.setCreateVisibleSessions(connectionId, enabled);
+  });
+}
+
+export async function setLocalAgentObserveLocalTasks(
+  connectionId: unknown,
+  enabled: unknown,
+  assertCaller = () => {},
+): Promise<boolean> {
+  if (
+    typeof connectionId !== 'string' ||
+    !connectionId ||
+    connectionId.length > 128 ||
+    typeof enabled !== 'boolean'
+  )
+    throwIpcError('INVALID_PARAMS', t('localAgent.invalidConnection'));
+  return settingsOperation(async () => {
+    const owner = activeOwnerScopeKey();
+    const pendingServer = current;
+    const server = pendingServer ? await pendingServer : undefined;
+    assertCaller();
+    if (
+      !server ||
+      current !== pendingServer ||
+      owner !== activeOwnerScopeKey() ||
+      isAppSessionBoundaryPending()
+    )
+      return false;
+    return server.setObserveLocalTasks(connectionId, enabled);
   });
 }
 

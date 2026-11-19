@@ -20,6 +20,12 @@ const MAX_CLIENTS = 128;
 const MAX_GRANT_CLIENTS = 32;
 const MAX_RETIRED_CLIENTS = 4096;
 const CLIENT_IDLE_MS = 10 * 60_000;
+const DEVICE_TASK_LIMIT = 100;
+const DEVICE_WAIT_DEFAULT = 20_000;
+const DEVICE_WAIT_MAX = 25_000;
+const DEVICE_GRANT_WAITERS = 4;
+const DEVICE_SETTLE_MS = 100;
+const DEVICE_STATUSES = ['running', 'awaiting', 'error', 'done', 'idle'] as const;
 const token = () => randomBytes(32).toString('base64url');
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const equal = (a: string, b: string) =>
@@ -69,6 +75,29 @@ interface Grant {
   client: LocalAgentClientIdentity;
   legacyRuntime: boolean;
   createVisibleSessions?: boolean;
+  /** Read-only task status for external devices; only Settings may turn it on. */
+  observeLocalTasks?: boolean;
+}
+type GrantPreference = 'createVisibleSessions' | 'observeLocalTasks';
+/**
+ * Task observation for external hardware companions. The host supplies it; a headless host
+ * may omit `focus`, or the whole port, and the matching methods are then not advertised.
+ */
+export interface LocalAgentDeviceObserve {
+  /** Current tasks of the active account. Every entry is re-projected by the server. */
+  tasks(): Promise<readonly unknown[]>;
+  /** Signals that task activity may have changed; carries no data. */
+  subscribe(listener: () => void): () => void;
+  focus?(sessionId: string, focus: boolean): void | Promise<void>;
+}
+export interface LocalAgentDeviceTask {
+  id: string;
+  title: string;
+  agentKind: string;
+  status: (typeof DEVICE_STATUSES)[number];
+  lastActivityAt: number;
+  startedAt: number | null;
+  turnGeneration: number | null;
 }
 interface Pair {
   id: string;
@@ -115,6 +144,27 @@ export interface LocalAgentServerDeps {
   changed?(): void;
   /** Product copy is supplied by the host's current locale; protocol tests remain host-free. */
   message?(code: string, fallback: string): string;
+  deviceObserve?: LocalAgentDeviceObserve;
+}
+const timestamp = (value: unknown) =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+/** Allowlist projection: nothing the host adds later can reach a device by accident. */
+function deviceTask(value: unknown): LocalAgentDeviceTask | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const task = value as Record<string, unknown>;
+  const { id, agentKind, status } = task;
+  if (typeof id !== 'string' || !id || id.length > 128) return undefined;
+  if (!DEVICE_STATUSES.includes(status as LocalAgentDeviceTask['status'])) return undefined;
+  const title = typeof task.title === 'string' ? task.title : '';
+  return {
+    id,
+    title: [...title.replace(UNSAFE_DISPLAY, ' ').trim()].slice(0, 200).join(''),
+    agentKind: typeof agentKind === 'string' && agentKind.length <= 64 ? agentKind : '',
+    status: status as LocalAgentDeviceTask['status'],
+    lastActivityAt: timestamp(task.lastActivityAt) ?? 0,
+    startedAt: timestamp(task.startedAt),
+    turnGeneration: timestamp(task.turnGeneration),
+  };
 }
 function record(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value))
@@ -127,9 +177,10 @@ function text(value: unknown, max = 1024, optional = false): string {
     throw new LocalAgentError('INVALID_REQUEST', '请求字段无效或过长。');
   return value;
 }
+const UNSAFE_DISPLAY = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/gu;
 function displayText(value: unknown, max: number): string {
   const result = text(value, max).trim();
-  if (!result || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(result)) {
+  if (!result || result.search(UNSAFE_DISPLAY) >= 0) {
     throw new LocalAgentError('INVALID_CLIENT', '应用名称或版本无效。');
   }
   return result;
@@ -206,7 +257,10 @@ export async function createLocalAgentServer(deps: LocalAgentServerDeps) {
       if (ids.has(id) || !/^[a-f0-9]{64}$/.test(digest)) throw new Error('grant');
       ids.add(id);
       const client = clientIdentity(saved.version === 1 ? g.name : g.client);
-      if (g.createVisibleSessions !== undefined && typeof g.createVisibleSessions !== 'boolean')
+      if (
+        (g.createVisibleSessions !== undefined && typeof g.createVisibleSessions !== 'boolean') ||
+        (g.observeLocalTasks !== undefined && typeof g.observeLocalTasks !== 'boolean')
+      )
         throw new Error('grant preference');
       return {
         id,
@@ -216,6 +270,7 @@ export async function createLocalAgentServer(deps: LocalAgentServerDeps) {
         client,
         legacyRuntime: saved.version === 1 || g.legacyRuntime === true,
         ...(g.createVisibleSessions === true ? { createVisibleSessions: true } : {}),
+        ...(g.observeLocalTasks === true ? { observeLocalTasks: true } : {}),
       };
     });
     if (saved.bindings !== undefined) {
@@ -399,12 +454,165 @@ export async function createLocalAgentServer(deps: LocalAgentServerDeps) {
     if (closing || !grants.includes(grant) || grant.scope !== deps.scope())
       throw new LocalAgentError('UNAUTHORIZED', '连接授权已撤销或账号已更改。');
   };
+  const device = deps.deviceObserve;
+  // Seeded from the clock so a cursor kept across a restart never equals a fresh revision.
+  let deviceRevision = Date.now();
+  let deviceTasks: LocalAgentDeviceTask[] = [];
+  let deviceKey: string | undefined;
+  let deviceReading: Promise<void> | undefined;
+  let deviceQueued: Promise<void> | undefined;
+  let deviceSettle: ReturnType<typeof setTimeout> | undefined;
+  const deviceWaiters = new Map<() => void, string>();
+  const wakeDevice = (owner?: string) => {
+    for (const [wake, id] of [...deviceWaiters]) if (owner === undefined || id === owner) wake();
+  };
+  const readDevice = () => {
+    const reading = (async () => {
+      const scope = deps.scope();
+      const listed = await device!.tasks();
+      if (closing || scope !== deps.scope())
+        throw new LocalAgentError('UNAUTHORIZED', '连接授权已撤销或账号已更改。');
+      const tasks: LocalAgentDeviceTask[] = [];
+      const seen = new Set<string>();
+      for (const entry of listed) {
+        const task = deviceTask(entry);
+        if (!task || seen.has(task.id)) continue;
+        seen.add(task.id);
+        if (tasks.push(task) >= DEVICE_TASK_LIMIT) break;
+      }
+      const key = JSON.stringify([scope, tasks]);
+      if (key !== deviceKey) {
+        deviceKey = key;
+        deviceTasks = tasks;
+        deviceRevision += 1;
+        wakeDevice();
+      }
+    })().finally(() => {
+      if (deviceReading === reading) deviceReading = undefined;
+    });
+    deviceReading = reading;
+    return reading;
+  };
+  /** A read that began before the caller asked may be stale, so the caller joins the next one. */
+  const refreshDevice = (): Promise<void> => {
+    if (!deviceReading) return readDevice();
+    deviceQueued ??= deviceReading
+      .catch(() => {})
+      .then(() => {
+        deviceQueued = undefined;
+        return readDevice();
+      });
+    return deviceQueued;
+  };
+  const stopObserving = device?.subscribe(() => {
+    if (closing || !deviceWaiters.size || deviceSettle) return;
+    deviceSettle = setTimeout(() => {
+      deviceSettle = undefined;
+      // A failed read ends the wait so each caller reports it from its own refresh.
+      if (deviceWaiters.size) refreshDevice().catch(() => wakeDevice());
+    }, DEVICE_SETTLE_MS);
+    deviceSettle.unref();
+  });
+  const assertObserver = (grant: Grant) => {
+    assertGrant(grant);
+    if (grant.observeLocalTasks !== true)
+      throw new LocalAgentError(
+        'DEVICE_OBSERVE_DISABLED',
+        '请先在 Cindy 设置中允许此应用查看本机任务状态。',
+      );
+  };
+  const deviceOperation = async (
+    method: string,
+    p: Record<string, unknown>,
+    grant: Grant,
+    res: ServerResponse,
+  ): Promise<unknown> => {
+    if (!device || (method === 'device/session/focus' && !device.focus))
+      throw new LocalAgentError('METHOD_UNSUPPORTED', '此 Cindy 版本不支持该操作。');
+    assertObserver(grant);
+    if (method === 'device/session/focus') {
+      const sessionId = text(p.sessionId, 128);
+      if (p.focus !== undefined && typeof p.focus !== 'boolean')
+        throw new LocalAgentError('INVALID_REQUEST', '请求字段无效或过长。');
+      await refreshDevice();
+      assertObserver(grant);
+      // Only a task this grant can already see may be opened; ids are never probed blindly.
+      if (!deviceTasks.some((task) => task.id === sessionId))
+        throw new LocalAgentError('TARGET_UNAVAILABLE', '该任务不存在或不可查看。');
+      await device.focus!(sessionId, p.focus !== false);
+      return {};
+    }
+    const cursor = p.cursor ?? 0,
+      waitMs = p.waitMs ?? DEVICE_WAIT_DEFAULT;
+    if (!Number.isSafeInteger(cursor) || (cursor as number) < 0)
+      throw new LocalAgentError('INVALID_CURSOR', '事件游标无效。');
+    if (
+      !Number.isSafeInteger(waitMs) ||
+      (waitMs as number) < 0 ||
+      (waitMs as number) > DEVICE_WAIT_MAX
+    )
+      throw new LocalAgentError('INVALID_REQUEST', '请求字段无效或过长。');
+    await refreshDevice();
+    assertObserver(grant);
+    if (cursor === deviceRevision && (waitMs as number) > 0 && !res.destroyed) {
+      let waiting = 0;
+      for (const owner of deviceWaiters.values()) if (owner === grant.id) waiting += 1;
+      if (waiting >= DEVICE_GRANT_WAITERS)
+        throw new LocalAgentError('BUSY', '等待中的请求过多，请稍后重试。');
+      await new Promise<void>((resolve) => {
+        const wake = () => {
+          clearTimeout(timer);
+          deviceWaiters.delete(wake);
+          res.off('close', wake);
+          resolve();
+        };
+        const timer = setTimeout(wake, waitMs as number);
+        deviceWaiters.set(wake, grant.id);
+        res.once('close', wake);
+      });
+      assertObserver(grant);
+      // Woken without a new revision: the wait timed out or a read failed. Changes that send no
+      // activity signal (rename, archive) are picked up here at the latest.
+      if (cursor === deviceRevision && !res.destroyed) {
+        await refreshDevice();
+        assertObserver(grant);
+      }
+    }
+    return { cursor: deviceRevision, tasks: deviceTasks };
+  };
+  const setPreference = (key: GrantPreference, connectionId: string, enabled: boolean) => {
+    const operation = preferenceChanges.then(async () => {
+      const grant = grants.find((g) => g.id === connectionId && g.scope === deps.scope());
+      if (!grant || closing) return false;
+      const previous = grant[key];
+      if (enabled) grant[key] = true;
+      else delete grant[key];
+      if (key === 'observeLocalTasks' && !enabled) wakeDevice(grant.id);
+      try {
+        await persist();
+      } catch (error) {
+        if (grant[key] === (enabled ? true : undefined)) {
+          if (previous === undefined) delete grant[key];
+          else grant[key] = previous;
+        }
+        throw error;
+      }
+      deps.changed?.();
+      return grants.includes(grant) && grant.scope === deps.scope() && !closing;
+    });
+    preferenceChanges = operation.then(
+      () => {},
+      () => {},
+    );
+    return operation;
+  };
   const runKey = (grant: Grant, id: string) => hash(JSON.stringify([grant.id, id]));
   const revoke = async (id: string) => {
     const found = grants.some((grant) => grant.id === id && grant.scope === deps.scope());
     if (!found) return false;
     // Remove authority before awaiting disk or runtime cleanup. Other grants stay live.
     grants = grants.filter((grant) => grant.id !== id);
+    wakeDevice(id);
     bindings = Object.fromEntries(
       Object.entries(bindings).filter(([, binding]) => binding.owner !== id),
     );
@@ -812,6 +1020,7 @@ export async function createLocalAgentServer(deps: LocalAgentServerDeps) {
               individualRevocation: true,
               toolPolicy: true,
               nativeReadOnly: false,
+              ...(device ? { deviceObserve: true } : {}),
             },
             methods: [
               'models',
@@ -824,6 +1033,8 @@ export async function createLocalAgentServer(deps: LocalAgentServerDeps) {
               'tool/reply',
               'session/close',
               'connect/revoke',
+              ...(device ? ['device/activity'] : []),
+              ...(device?.focus ? ['device/session/focus'] : []),
             ],
           },
         });
@@ -872,6 +1083,10 @@ export async function createLocalAgentServer(deps: LocalAgentServerDeps) {
         json(res, 200, { result: await operation(method, params, grant) });
         return;
       }
+      if (method === 'device/activity' || method === 'device/session/focus') {
+        json(res, 200, { result: await deviceOperation(method, params, grant, res) });
+        return;
+      }
       const id = text(rpc.id, 128);
       const key = `${grant.id}:${id}`;
       const identity = /^([A-Za-z0-9_-]{8,64}):([1-9][0-9]{0,14})$/.exec(id);
@@ -902,7 +1117,8 @@ export async function createLocalAgentServer(deps: LocalAgentServerDeps) {
       const known = error instanceof LocalAgentError;
       const code = known ? error.code : 'LOCAL_AGENT_FAILED';
       deps.warn(code);
-      json(res, code === 'UNAUTHORIZED' || code === 'FORBIDDEN' ? 403 : 400, {
+      const denied = ['UNAUTHORIZED', 'FORBIDDEN', 'DEVICE_OBSERVE_DISABLED'].includes(code);
+      json(res, denied ? 403 : 400, {
         error: {
           code,
           message: message(code, known ? error.message : 'Cindy 本机接入操作未完成。'),
@@ -931,6 +1147,8 @@ export async function createLocalAgentServer(deps: LocalAgentServerDeps) {
     );
   } catch {
     closing = true;
+    stopObserving?.();
+    clearTimeout(deviceSettle);
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     throw new LocalAgentError('DISCOVERY_UNAVAILABLE', '未能保存本机应用连接信息。');
@@ -952,6 +1170,9 @@ export async function createLocalAgentServer(deps: LocalAgentServerDeps) {
           !grants.some((g) => g.id === run.owner && g.scope === deps.scope()))
       )
         void closeRun(id).catch(() => {});
+    // An account switch ends waits that began under the previous account.
+    for (const owner of new Set(deviceWaiters.values()))
+      if (!grants.some((g) => g.id === owner && g.scope === deps.scope())) wakeDevice(owner);
   }, 1000).unref();
   return {
     base,
@@ -965,36 +1186,17 @@ export async function createLocalAgentServer(deps: LocalAgentServerDeps) {
           name: g.name,
           clientId: g.client.id,
           ...(g.createVisibleSessions === true ? { createVisibleSessions: true } : {}),
+          ...(g.observeLocalTasks === true ? { observeLocalTasks: true } : {}),
         })),
-    setCreateVisibleSessions(connectionId: string, enabled: boolean) {
-      const operation = preferenceChanges.then(async () => {
-        const grant = grants.find((g) => g.id === connectionId && g.scope === deps.scope());
-        if (!grant || closing) return false;
-        const previous = grant.createVisibleSessions;
-        if (enabled) grant.createVisibleSessions = true;
-        else delete grant.createVisibleSessions;
-        try {
-          await persist();
-        } catch (error) {
-          if (grant.createVisibleSessions === (enabled ? true : undefined)) {
-            if (previous === undefined) delete grant.createVisibleSessions;
-            else grant.createVisibleSessions = previous;
-          }
-          throw error;
-        }
-        deps.changed?.();
-        return grants.includes(grant) && grant.scope === deps.scope() && !closing;
-      });
-      preferenceChanges = operation.then(
-        () => {},
-        () => {},
-      );
-      return operation;
-    },
+    setCreateVisibleSessions: (connectionId: string, enabled: boolean) =>
+      setPreference('createVisibleSessions', connectionId, enabled),
+    setObserveLocalTasks: (connectionId: string, enabled: boolean) =>
+      setPreference('observeLocalTasks', connectionId, enabled),
     revoke,
     async revokeAll() {
       grants = [];
       bindings = {};
+      wakeDevice();
       for (const pair of pairs.values()) pair.consent?.abort();
       pairs.clear();
       dedup.clear();
@@ -1009,6 +1211,9 @@ export async function createLocalAgentServer(deps: LocalAgentServerDeps) {
     async close() {
       closing = true;
       clearInterval(sweep);
+      stopObserving?.();
+      clearTimeout(deviceSettle);
+      wakeDevice();
       for (const pair of pairs.values()) pair.consent?.abort();
       pairs.clear();
       const stopped = await Promise.allSettled([...runs.keys()].map((id) => closeRun(id)));

@@ -83,6 +83,8 @@
   "localAgent": {
     "createVisibleSessions": "Crear sesiones visibles en Cindy",
     "createVisibleSessionsHint": "Se aplica a las sesiones que esta aplicación abra a partir de ahora. Los mensajes se guardan en Cindy; al desactivarlo, las sesiones existentes se conservan.",
+    "observeLocalTasks": "Permitir ver el estado de las sesiones en este ordenador",
+    "observeLocalTasksHint": "Si se activa, esta aplicación puede leer los títulos y el estado de las sesiones de este ordenador y abrir una sesión en Cindy. No puede ver el contenido de los mensajes ni controlar las sesiones.",
     "saveFailed": "No se pudo guardar esta configuración. Inténtalo de nuevo.",
     "messageSource": "Enviado por la aplicación local “{{name}}”",
     "title": "Conexiones de aplicaciones locales",
@@ -119,6 +121,8 @@
     "storageUnavailable": "No se pudieron leer ni guardar los datos de conexión de la aplicación local. Se conservaron los registros de autorización existentes.",
     "stopUnconfirmed": "Se ha bloqueado el envío de nuevos mensajes a esta ejecución, pero no se ha confirmado que el proceso se haya detenido.",
     "interactionUnavailable": "El motor requiere una interacción que esta aplicación no puede recibir.",
+    "observeLocalTasksRequired": "Primero permite en los ajustes de Cindy que esta aplicación vea el estado de las sesiones de este ordenador.",
+    "taskUnavailable": "Esa sesión no existe o esta aplicación no puede verla.",
     "interrupted": "Este envío fue interrumpido.",
     "toolTimeout": "Se agotó el tiempo de espera de la herramienta de la aplicación. No se volvió a intentar automáticamente.",
     "connectResult": "Regresa a la aplicación solicitante para ver el resultado de la conexión. La autorización se decide en la ventana de confirmación de Cindy.",
