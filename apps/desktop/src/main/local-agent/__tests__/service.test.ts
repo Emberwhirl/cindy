@@ -19,6 +19,7 @@ const mock = vi.hoisted(() => ({
   revoke: vi.fn(async (_id: string) => true),
   revokeAll: vi.fn(async () => {}),
   setVisible: vi.fn(async (_id: string, _enabled: boolean) => true),
+  setObserve: vi.fn(async (_id: string, _enabled: boolean) => true),
   close: vi.fn(async () => {}),
   send: vi.fn(),
   trusted: true,
@@ -74,6 +75,7 @@ vi.mock('../../maker-host/createDesktopProviderService.js', () => ({
 }));
 vi.mock('../../logger.js', () => ({ createLogger: () => ({ warn: vi.fn() }) }));
 vi.mock('../runtime.js', () => ({ openLocalAgentRuntime: vi.fn() }));
+vi.mock('../deviceObserve.js', () => ({ desktopDeviceObserve: () => undefined }));
 vi.mock('../server.js', () => ({
   LocalAgentError: class extends Error {
     constructor(
@@ -96,6 +98,7 @@ vi.mock('../server.js', () => ({
       revoke: mock.revoke,
       revokeAll: mock.revokeAll,
       setCreateVisibleSessions: mock.setVisible,
+      setObserveLocalTasks: mock.setObserve,
       close: mock.close,
     };
   },
@@ -114,6 +117,7 @@ import {
   localAgentDeveloperConnection,
   revokeLocalAgentConnections,
   setLocalAgentCreateVisibleSessions,
+  setLocalAgentObserveLocalTasks,
 } from '../service.js';
 
 beforeEach(async () => {
@@ -160,6 +164,11 @@ describe('generic local app Cindy authorization', () => {
     mock.generation++;
     expect(await pending).toBe(false);
     expect(mock.setVisible).not.toHaveBeenCalled();
+    // makecindy/cindy#11188: task status access takes the same owner-scoped path and never the other switch.
+    expect(await setLocalAgentObserveLocalTasks('grant-a', true)).toBe(true);
+    expect(mock.setObserve).toHaveBeenCalledWith('grant-a', true);
+    expect(mock.setVisible).not.toHaveBeenCalled();
+    await expect(setLocalAgentObserveLocalTasks('', true)).rejects.toThrow('[INVALID_PARAMS]');
   });
   // Regression: the old OS dialog owned cancellation. The shared Renderer round trip
   // must now retire the exact request, including queued prompts and late replies.

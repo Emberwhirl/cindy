@@ -83,6 +83,8 @@
   "localAgent": {
     "createVisibleSessions": "于 Cindy 中立可见之差事",
     "createVisibleSessionsHint": "仅及此应用程序此后所开之差事。讯存于 Cindy 中；关闭之后，既有差事仍留。",
+    "observeLocalTasks": "许观此机差事之状",
+    "observeLocalTasksHint": "启之，此应用程序可读此机差事之题与状，并于 Cindy 中开之；不得见讯之文，亦不得操持差事。",
     "saveFailed": "此设未能存，请再试。",
     "messageSource": "此机应用程序「{{name}}」所遣",
     "title": "此机应用程序之连接",
@@ -119,6 +121,8 @@
     "storageUnavailable": "不能读存此机应用程序之连接数据，既有授权纪录已留。",
     "stopUnconfirmed": "已阻续向此运行遣讯，然尚未确知进程已止。",
     "interactionUnavailable": "引擎所需之交互，此应用程序不能接收。",
+    "observeLocalTasksRequired": "请先于 Cindy 设置中，许此应用程序观此机差事之状。",
+    "taskUnavailable": "此差事不存，或此应用程序不得观之。",
     "interrupted": "此番传遣已中断。",
     "toolTimeout": "应用程序工具调用逾时，未自动再试。",
     "connectResult": "请归申请连接之应用程序察其结果，授权由 Cindy 确认窗口定之。",

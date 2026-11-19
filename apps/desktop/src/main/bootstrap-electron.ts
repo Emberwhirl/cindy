@@ -449,7 +449,7 @@ import {
 } from './cindy-make/versionRuntimeIdentity.js';
 import { createStorageIpcHandlers } from './cindy-media/storageIpc';
 import { registerLocalAgentConfirmationIpc, cancelLocalAgentConfirmations } from './local-agent/confirmation.js';
-import { disposeLocalAgentHost, localAgentConnections, localAgentDeveloperConnection, revokeLocalAgentConnections, setLocalAgentCreateVisibleSessions } from './local-agent/service.js';
+import { disposeLocalAgentHost, localAgentConnections, localAgentDeveloperConnection, revokeLocalAgentConnections, setLocalAgentCreateVisibleSessions, setLocalAgentObserveLocalTasks } from './local-agent/service.js';
 import { clearLocalEntries } from './device-link/remoteMediaCacheStore';
 import {
   collectDatabaseSizeWarningStatus,
@@ -9469,6 +9469,10 @@ const registerIpcHandlers = () => {
     ipcMain.handle('local-agent:set-create-visible-sessions', (event, connectionId: unknown, enabled: unknown) => {
       assertTrustedAppRendererEvent(event);
       return setLocalAgentCreateVisibleSessions(connectionId, enabled, () => assertTrustedAppRendererEvent(event));
+    });
+    ipcMain.handle('local-agent:set-observe-local-tasks', (event, connectionId: unknown, enabled: unknown) => {
+      assertTrustedAppRendererEvent(event);
+      return setLocalAgentObserveLocalTasks(connectionId, enabled, () => assertTrustedAppRendererEvent(event));
     });
     ipcMain.handle('local-agent:developer-connection', (event) => {
       assertTrustedAppRendererEvent(event);

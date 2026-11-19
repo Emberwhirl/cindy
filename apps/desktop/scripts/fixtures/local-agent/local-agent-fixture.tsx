@@ -14,13 +14,18 @@ mountPage({
         if (ctx.data.loadFailed) throw new Error('fixture connection read failed');
         return ctx.data.connections ?? [];
       },
-      setCreateVisibleSessions: async (id: string, enabled: boolean) => {
-        if (ctx.data.saveFailed) throw new Error('fixture setting write failed');
-        const connection = ctx.data.connections?.find((entry: { id: string }) => entry.id === id);
-        if (!connection) return false;
-        connection.createVisibleSessions = enabled;
-        return true;
-      },
+      ...Object.fromEntries(
+        (['createVisibleSessions', 'observeLocalTasks'] as const).map((key) => [
+          key === 'observeLocalTasks' ? 'setObserveLocalTasks' : 'setCreateVisibleSessions',
+          async (id: string, enabled: boolean) => {
+            if (ctx.data.saveFailed) throw new Error('fixture setting write failed');
+            const connection = ctx.data.connections?.find((entry: { id: string }) => entry.id === id);
+            if (!connection) return false;
+            connection[key] = enabled;
+            return true;
+          },
+        ]),
+      ),
       revoke: async (id: string) => {
         if (id !== ctx.data.connections?.[0]?.id) throw new Error('wrong connection selected');
         if (ctx.data.revokeFailed) throw new Error('fixture revoke failed');

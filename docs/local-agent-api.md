@@ -86,6 +86,21 @@ node scripts/examples/local-agent-client.mjs --connection-code "cindy-local:v1:<
 
 可见任务仍沿用该应用原有的工具策略、授权隔离和独立原生历史，不装载私人记忆，也不使应用取得其他任务的访问权。仅查看任务不接管；用户在 Cindy 中发送、插话或修改运行设置前，宿主先拒绝该外部执行的新输入，关闭旧执行并完成持久上下文交接，再以普通 Cindy 任务继续。交接失败时阻止此次操作并保留重试，不回退到外部实例。外部执行正常关闭同样完成交接；应用的恢复句柄只保留接管前的原生历史，无法观察、控制或恢复接管后的 Cindy 运行时。此设置不提供未安装唤起、安装后重试或未登录期间的入站队列。
 
+### 查看本机任务状态
+
+供外接硬件的伴随进程（Stream Deck、宏键盘、ESP32 等）显示任务状态并打开任务。每个已连接应用有独立的「允许查看本机任务状态」开关，默认关闭；只有 Cindy 本机的受信设置界面能更改，应用不能通过 RPC 开启。未开启时下面两个 method 返回 HTTP 403 与 `DEVICE_OBSERVE_DISABLED`。`capabilities` 声明 `features.deviceObserve` 且 `methods` 含对应名称时才可调用；没有窗口的宿主不提供 `device/session/focus`。两者不需要请求编号，可安全重试。
+
+| method | params | result / 语义 |
+|---|---|---|
+| `device/activity` | `{cursor?,waitMs?}` | `{cursor,tasks:[{id,title,agentKind,status,lastActivityAt,startedAt,turnGeneration}]}`；返回完整快照 |
+| `device/session/focus` | `{sessionId,focus?}` | `{}`；在 Cindy 中打开该任务。`focus` 缺省 true 把窗口带到前台，false 只在后台切换任务 |
+
+`device/activity` 首次调用不带 `cursor`（或传 0）立即返回。之后带上一次的 `cursor`：列表有变化立即返回新快照，否则最多等待 `waitMs` 毫秒（缺省 20000，上限 25000，0 表示不等待）后返回相同的 `cursor`。`cursor` 是不透明的单调整数，与当前不一致的旧值同样立即得到快照；非法值返回 `INVALID_CURSOR`。运行状态变化会提前结束等待，改名、归档等变化最迟在等待结束时反映。每个授权同时最多 4 个等待中的请求，超出返回 `BUSY`。关闭开关、撤销授权或切换账号会结束等待并返回错误。
+
+任务范围是这台电脑侧栏里的普通任务（含未归属项目的对话），按最近活动排序，最多 100 条；不含已归档、隐藏、审查、追问、伙伴任务、SSH 或其他电脑上的任务，也不含团队成员任务（成员的报错与等待会体现在负责人任务的 `status` 上）。`status` 为 `running`、`awaiting`（等待用户处理）、`error`、`done`（已完成未读）或 `idle`，与侧栏一致；不认识的值按 `idle` 显示。`title` 最长 200 字符并去除控制字符，可能为空。`lastActivityAt`、`startedAt`（仅运行中，否则 null）为毫秒时间戳；`turnGeneration` 标识当前轮次，可能为 null。结果不含消息正文、工具参数、当前动作摘要或任何路径。
+
+`device/session/focus` 只接受最近快照里的任务，其他编号返回 `TARGET_UNAVAILABLE`。此授权只读：发送、中断与回答交互不随它开放。
+
 ## 目录和会话操作
 
 | method | params | result / 语义 |
@@ -171,5 +186,6 @@ Claude client-only 关闭原生 tools/settings/skills；Pi 仅开启客户端网
 - `maker-core` 对应适配器：Claude SDK 隔离选项；Pi 真二进制 + 本机模型响应夹具；Codex 真 app-server（需 `CINDY_CODEX_TEST_BINARY`）。
 - `apps/desktop/scripts/fixtures/local-agent/`：真实设置组件，多应用单项撤销、取消、失败、手机宽度、五种语言与深浅主题；宿主接口由场景提供，不替代真实授权与 IPC 验收。
 
+- `server.integration.test.ts` 的「external device task observation」：未开启 403、字段白名单、游标等待与提前唤醒、只打开已列出任务、无窗口宿主不声明 focus；该文件不加载 Electron。
 - `service.test.ts`：真实 service/确认桥接/可信 IPC handler 联动，批准、取消、abort、超时、导航/关闭、账号换代、伪造回包和并发撤销隔离。
 - `apps/desktop/scripts/fixtures/local-agent-confirmation/`：生产确认 Host 与共用 ConfirmDialog，五语言、双主题、320px、默认取消焦点、Tab/Esc、队列取消；主进程与实际授权另由隔离 Desktop 验证。

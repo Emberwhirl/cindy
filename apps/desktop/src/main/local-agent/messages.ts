@@ -55,6 +55,12 @@ export function localAgentMessage(code: string): string {
     case 'RUNTIME_CLOSE_UNCONFIRMED':
       key = 'stopUnconfirmed';
       break;
+    case 'DEVICE_OBSERVE_DISABLED':
+      key = 'observeLocalTasksRequired';
+      break;
+    case 'TARGET_UNAVAILABLE':
+      key = 'taskUnavailable';
+      break;
     case 'INTERACTION_UNAVAILABLE':
       key = 'interactionUnavailable';
       break;

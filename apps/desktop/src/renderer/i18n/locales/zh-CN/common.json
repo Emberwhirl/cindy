@@ -83,6 +83,8 @@
   "localAgent": {
     "createVisibleSessions": "在 Cindy 中创建可见任务",
     "createVisibleSessionsHint": "仅影响该应用之后打开的任务。消息会保存在 Cindy 中，关闭后已有任务仍保留。",
+    "observeLocalTasks": "允许查看本机任务状态",
+    "observeLocalTasksHint": "开启后，该应用可读取这台电脑上任务的标题与状态，并在 Cindy 中打开任务；看不到消息内容，也不能操作任务。",
     "saveFailed": "保存设置失败，请重试。",
     "messageSource": "由本机应用「{{name}}」发送",
     "title": "本机应用连接",
@@ -119,6 +121,8 @@
     "storageUnavailable": "无法读取或保存本机应用连接数据，已保留现有授权记录。",
     "stopUnconfirmed": "已阻止继续向此执行发送消息，但尚未确认进程已停止。",
     "interactionUnavailable": "引擎需要此应用无法接收的交互操作。",
+    "observeLocalTasksRequired": "请先在 Cindy 设置中允许此应用查看本机任务状态。",
+    "taskUnavailable": "该任务不存在，或此应用无法查看。",
     "interrupted": "本次发送已中断。",
     "toolTimeout": "应用工具调用已超时，未自动重试。",
     "connectResult": "请返回申请连接的应用查看结果，授权由 Cindy 确认窗口决定。",
