@@ -14,8 +14,10 @@ schema 2；不认识该字段的旧版本读取后按关闭处理，再次写入
 invoke 白名单，RPC 参数不能开启。未开启时两个 method 返回 HTTP 403 与
 `DEVICE_OBSERVE_DISABLED`，且不读取任务。
 
-任务条目只有 `id`、`title`、`agentKind`、`status`、`lastActivityAt`、`startedAt`、
-`turnGeneration`；服务端按白名单重新投影，消息正文、工具参数、当前动作摘要与路径不出进程。
+任务条目只有 `id`、`title`、`agentKind`、`status`、`lastActivityAt`、`startedAt`；
+服务端按白名单重新投影，消息正文、工具参数、当前动作摘要与路径不出进程。
+`agentKind` 是执行引擎，使用与 `models[].engine` 相同的 `claude-code`、`codex`、`pi`、
+`acp`（插件提供的引擎）；客户端对未知值原样显示。
 `status` 取值 `running`、`awaiting`、`error`、`done`、`idle`，客户端遇到不认识的值按 `idle`
 显示。后续只追加可选字段。`cursor` 是不透明的单调整数，跨实例不复用。
 

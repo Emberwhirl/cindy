@@ -167,7 +167,6 @@ describe('desktopDeviceObserve late island readiness', () => {
         status: 'running',
         lastActivityAt: 30,
         startedAt: 20,
-        turnGeneration: 1,
       },
     ];
     const signaledAt = performance.now();
@@ -194,7 +193,6 @@ describe('desktopDeviceObserve late island readiness', () => {
         status: 'running',
         lastActivityAt: 30,
         startedAt: 20,
-        turnGeneration: 1,
       },
     ];
 

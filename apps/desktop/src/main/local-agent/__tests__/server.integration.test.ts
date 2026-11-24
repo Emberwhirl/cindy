@@ -1009,7 +1009,6 @@ describe('external device task observation', () => {
     status: 'running',
     lastActivityAt: 20,
     startedAt: 10,
-    turnGeneration: 3,
   };
   const observer = async (port: ReturnType<typeof tasks>, overrides = {}) => {
     const f = await fixture({ deviceObserve: port, ...overrides });
@@ -1151,14 +1150,14 @@ describe('external device task observation', () => {
       raw,
       { ...raw, id: 'task-2', status: 'thinking' },
       { ...raw, id: 'task-1', title: 'duplicate' },
-      { ...raw, id: 'task-3', title: null, status: 'idle', startedAt: null, turnGeneration: 'x' },
+      { ...raw, id: 'task-3', title: null, status: 'idle', startedAt: null },
       null,
     );
     const { f, secret } = await observer(port);
     const { result } = await f.rpc('device/activity', {}, secret);
     expect(result.tasks).toEqual([
       clean,
-      { ...clean, id: 'task-3', title: '', status: 'idle', startedAt: null, turnGeneration: null },
+      { ...clean, id: 'task-3', title: '', status: 'idle', startedAt: null },
     ]);
     expect(JSON.stringify(result)).not.toMatch(/secret-project|id_rsa|private body/);
   });

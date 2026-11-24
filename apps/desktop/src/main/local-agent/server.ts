@@ -97,7 +97,6 @@ export interface LocalAgentDeviceTask {
   status: (typeof DEVICE_STATUSES)[number];
   lastActivityAt: number;
   startedAt: number | null;
-  turnGeneration: number | null;
 }
 interface Pair {
   id: string;
@@ -163,7 +162,6 @@ function deviceTask(value: unknown): LocalAgentDeviceTask | undefined {
     status: status as LocalAgentDeviceTask['status'],
     lastActivityAt: timestamp(task.lastActivityAt) ?? 0,
     startedAt: timestamp(task.startedAt),
-    turnGeneration: timestamp(task.turnGeneration),
   };
 }
 function record(value: unknown): Record<string, unknown> {

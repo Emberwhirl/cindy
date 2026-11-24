@@ -3,6 +3,7 @@ import { getSessionListActivityAt, resolveSessionRightStatus, type SessionRightS
 import { getCurrentDbClientSnapshot, type CurrentDbClientSnapshot } from '../localDb/client/current.js';
 import { botSessionLinks, orcaTeams, orcaWorkers, sessions } from '../localDb/schema.js';
 import { listRecentWorkdirs } from '../localDb/ipc/recentWorkdirs.js';
+import { dbToMakerEngineKind } from '../../shared/agentKindConversion.js';
 import { projectKeyComparisonKey } from '../../shared/projectKeys.js';
 import type { PluginObserveTask, PluginObserveTaskStatus } from '../../shared/pluginObserve.js';
 import { DESKTOP_TASK_LIST_SESSION_SOURCES } from '../../shared/sessionSource.js';
@@ -17,7 +18,6 @@ export interface DeviceObserveTask {
   status: PluginObserveTaskStatus;
   lastActivityAt: number;
   startedAt: number | null;
-  turnGeneration: number | null;
 }
 const projectKey = (dir: string) => projectKeyComparisonKey(`local:${dir}`, process.platform);
 
@@ -81,13 +81,12 @@ async function readTaskActivity(snapshot: CurrentDbClientSnapshot, matched: Task
     list.push(resolveSessionRightStatus(await readActivity(worker.id)));
     workerStatuses.set(worker.leadSessionId, list);
   }
-  const result = new Map<string, { status: SessionRightStatus; startedAt: number | null; turnGeneration: number | null }>();
+  const result = new Map<string, { status: SessionRightStatus; startedAt: number | null }>();
   for (const row of matched) {
     const own = await readActivity(row.id);
     result.set(row.id, {
       status: withWorkerAttention(resolveSessionRightStatus(own), workerStatuses.get(row.id) ?? []),
       startedAt: own.phase === 'running' ? (own.startedAtMs ?? null) : null,
-      turnGeneration: own.turnGeneration ?? null,
     });
   }
   return result;
@@ -191,15 +190,14 @@ export async function listDeviceObserveTasks(): Promise<DeviceObserveTask[]> {
   // An account switch during the reads must not hand the previous account's tasks to a device.
   if (getCurrentDbClientSnapshot() !== snapshot) throw new Error('PERMISSION_DENIED');
   return matched.map((row) => {
-    const { status, startedAt, turnGeneration } = activity.get(row.id)!;
+    const { status, startedAt } = activity.get(row.id)!;
     return {
       id: row.id,
       title: row.title ?? '',
-      agentKind: row.agentKind,
+      agentKind: dbToMakerEngineKind(row.agentKind),
       status: status === 'time' ? 'idle' : status,
       lastActivityAt: getSessionListActivityAt(row),
       startedAt,
-      turnGeneration,
     };
   });
 }

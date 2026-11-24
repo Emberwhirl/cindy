@@ -12,7 +12,7 @@ export function formatTasks(tasks, localTime) {
     ...lines,
     ...tasks.map(
       (task) =>
-        `${task.status.padEnd(8)} ${task.agentKind.padEnd(10)} ${task.title} (${task.id})`,
+        `${task.status.padEnd(8)} ${task.agentKind.padEnd(11)} ${task.title} (${task.id})`,
     ),
   ].join('\n');
 }
