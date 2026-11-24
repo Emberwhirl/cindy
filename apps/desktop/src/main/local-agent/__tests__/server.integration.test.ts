@@ -1052,17 +1052,19 @@ describe('external device task observation', () => {
     };
   };
 
-  // Value: verifies permission retry, allowlisted output, and grant revocation in a real process.
+  // Value: verifies permission retry, allowlisted output, background focus, and grant revocation in a real process.
   it(
-    'waits for task observation to be enabled, prints one JSON snapshot, and revokes on exit',
+    'waits for the permission, prints one JSON snapshot, focuses a listed task in the background, and revokes on exit',
     async () => {
       const port = tasks(raw);
       const f = await fixture({ deviceObserve: port });
       const processRun = runObserver(f.server().discoveryFile, [
         '--client-name',
         'Deck',
-        '--once',
         '--json',
+        '--focus',
+        'task-1',
+        '--background',
       ]);
 
       await vi.waitFor(() => expect(f.server().connections()).toHaveLength(1), { timeout: 5_000 });
@@ -1079,31 +1081,6 @@ describe('external device task observation', () => {
       expect(lines).toHaveLength(1);
       expect(JSON.parse(lines[0]!)).toEqual({ cursor: expect.any(Number), tasks: [clean] });
       expect(stderr).toContain(hint);
-      expect(f.server().connections()).toEqual([]);
-    },
-    10_000,
-  );
-
-  // Value: verifies the background focus option through the public RPC.
-  it(
-    'focuses a listed task in the background and revokes on exit',
-    async () => {
-      const port = tasks(raw);
-      const f = await fixture({ deviceObserve: port });
-      const processRun = runObserver(f.server().discoveryFile, [
-        '--client-name',
-        'Deck',
-        '--focus',
-        'task-1',
-        '--background',
-      ]);
-
-      await vi.waitFor(() => expect(f.server().connections()).toHaveLength(1), { timeout: 5_000 });
-      const connection = f.server().connections()[0];
-      expect(await f.server().setObserveLocalTasks(connection.id, true)).toBe(true);
-
-      const outcome = await processRun.completed;
-      if ('error' in outcome) throw outcome.error;
       expect(port.focus).toHaveBeenCalledTimes(1);
       expect(port.focus).toHaveBeenCalledWith('task-1', false);
       expect(f.server().connections()).toEqual([]);

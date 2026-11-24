@@ -144,7 +144,7 @@ export async function main(argv = process.argv.slice(2)) {
             );
             disabledHintPrinted = true;
           }
-          await delay(2_000, undefined, { signal: controller.signal }).catch(
+          await delay(1_000, undefined, { signal: controller.signal }).catch(
             (delayError) => {
               if (!controller.signal.aborted) throw delayError;
             },
