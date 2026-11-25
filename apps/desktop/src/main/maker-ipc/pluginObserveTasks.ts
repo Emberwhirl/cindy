@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { getSessionListActivityAt, resolveSessionRightStatus, type SessionRightStatus } from '@cindy/maker-shared/session-activity';
 import { getCurrentDbClientSnapshot, type CurrentDbClientSnapshot } from '../localDb/client/current.js';
 import { botSessionLinks, orcaTeams, orcaWorkers, sessions } from '../localDb/schema.js';
@@ -170,7 +170,8 @@ const deviceTask = and(
 export async function listDeviceObserveTasks(): Promise<DeviceObserveTask[]> {
   const snapshot = getCurrentDbClientSnapshot();
   if (!snapshot) throw new Error('HOST_NOT_READY');
-  const rows = await snapshot.client.drizzle
+  // Ordered and capped in SQL by the same key as getSessionListActivityAt, so the read stays small.
+  const matched = await snapshot.client.drizzle
     .select({
       ...activityFacts,
       id: sessions.id,
@@ -182,10 +183,9 @@ export async function listDeviceObserveTasks(): Promise<DeviceObserveTask[]> {
     })
     .from(sessions)
     .leftJoin(botSessionLinks, eq(botSessionLinks.sessionId, sessions.id))
-    .where(deviceTask);
-  const matched = rows
-    .sort((a, b) => getSessionListActivityAt(b) - getSessionListActivityAt(a) || a.id.localeCompare(b.id))
-    .slice(0, MAX_DEVICE_TASKS);
+    .where(deviceTask)
+    .orderBy(desc(sql`coalesce(${sessions.lastActivityAt}, ${sessions.userSendAt}, ${sessions.updatedAt})`), asc(sessions.id))
+    .limit(MAX_DEVICE_TASKS);
   const activity = await readTaskActivity(snapshot, matched);
   // An account switch during the reads must not hand the previous account's tasks to a device.
   if (getCurrentDbClientSnapshot() !== snapshot) throw new Error('PERMISSION_DENIED');

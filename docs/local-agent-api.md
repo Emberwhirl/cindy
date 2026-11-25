@@ -106,6 +106,8 @@ node scripts/examples/local-agent-client.mjs --connection-code "cindy-local:v1:<
 
 `device/activity` 首次调用不带 `cursor`（或传 0）立即返回。之后带上一次的 `cursor`：列表有变化立即返回新快照，否则最多等待 `waitMs` 毫秒（缺省 20000，上限 25000，0 表示不等待）后返回相同的 `cursor`。`cursor` 是不透明的单调整数，与当前不一致的旧值同样立即得到快照；非法值返回 `INVALID_CURSOR`。运行状态变化会提前结束等待，改名、归档等变化最迟在等待结束时反映。每个授权同时最多 4 个等待中的请求，超出返回 `BUSY`。关闭开关、撤销授权或切换账号会结束等待并返回错误。
 
+Cindy 启动初期或正在切换账号时，`device/activity` 可能返回 `LOCAL_AGENT_FAILED`；这是暂时状态，客户端几秒后重试即可。
+
 任务范围是这台电脑侧栏里的普通任务（含未归属项目的对话），按最近活动排序，最多 100 条；不含已归档、隐藏、审查、追问、伙伴任务、SSH 或其他电脑上的任务，也不含团队成员任务（成员的报错与等待会体现在负责人任务的 `status` 上）。`agentKind` 是执行引擎，取值为 `claude-code`、`codex`、`pi`、`acp`（插件提供的引擎），与 `models[].engine` 拼写一致；客户端对未知值原样显示。`status` 为 `running`、`awaiting`（等待用户处理）、`error`、`done`（已完成未读）或 `idle`，与侧栏一致；不认识的值按 `idle` 显示。`title` 最长 200 字符并去除控制字符，可能为空。`lastActivityAt`、`startedAt`（仅运行中，否则 null）为毫秒时间戳。结果不含消息正文、工具参数、当前动作摘要或任何路径。
 
 `device/session/focus` 只接受最近快照里的任务，其他编号返回 `TARGET_UNAVAILABLE`。此授权只读：发送、中断与回答交互不随它开放。
